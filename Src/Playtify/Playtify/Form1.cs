@@ -74,7 +74,8 @@ namespace Playtify
         private static int width, height;
         private static bool f11switch = false;
         public int numBars = 100;
-        public float[] barData = new float[100];
+        public float[] barDataLeft = new float[100];
+        public float[] barDataRight = new float[100];
         public int minFreq = 0;
         public int maxFreq = 23000;
         public int barSpacing = 0;
@@ -82,11 +83,13 @@ namespace Playtify
         public bool isAverage = false;
         public float highScaleAverage = 1000f;
         public float highScaleNotAverage = 1000f;
-        public LineSpectrum lineSpectrum;
+        public LineSpectrum lineSpectrumLeft;
+        public LineSpectrum lineSpectrumRight;
         public CSCore.SoundIn.WasapiCapture capture;
         public CSCore.DSP.FftSize fftSize;
         public float[] fftBuffer;
-        public BasicSpectrumProvider spectrumProvider;
+        public BasicSpectrumProvider spectrumProviderLeft;
+        public BasicSpectrumProvider spectrumProviderRight;
         public CSCore.IWaveSource finalSource;
         public string backgroundcolor = "";
         public string frequencystickscolor = "";
@@ -349,10 +352,20 @@ namespace Playtify
             capture.Initialize();
             CSCore.IWaveSource source = new CSCore.Streams.SoundInSource(capture);
             fftBuffer = new float[(int)CSCore.DSP.FftSize.Fft4096];
-            spectrumProvider = new BasicSpectrumProvider(capture.WaveFormat.Channels, capture.WaveFormat.SampleRate, CSCore.DSP.FftSize.Fft4096);
-            lineSpectrum = new LineSpectrum(CSCore.DSP.FftSize.Fft4096)
+            spectrumProviderLeft = new BasicSpectrumProvider(capture.WaveFormat.Channels, capture.WaveFormat.SampleRate, CSCore.DSP.FftSize.Fft4096);
+            lineSpectrumLeft = new LineSpectrum(CSCore.DSP.FftSize.Fft4096)
             {
-                SpectrumProvider = spectrumProvider,
+                SpectrumProvider = spectrumProviderLeft,
+                UseAverage = true,
+                BarCount = numBars,
+                BarSpacing = 2,
+                IsXLogScale = false,
+                ScalingStrategy = ScalingStrategy.Sqrt
+            };
+            spectrumProviderRight = new BasicSpectrumProvider(capture.WaveFormat.Channels, capture.WaveFormat.SampleRate, CSCore.DSP.FftSize.Fft4096);
+            lineSpectrumRight = new LineSpectrum(CSCore.DSP.FftSize.Fft4096)
+            {
+                SpectrumProvider = spectrumProviderRight,
                 UseAverage = true,
                 BarCount = numBars,
                 BarSpacing = 2,
@@ -371,26 +384,51 @@ namespace Playtify
         }
         public void NotificationSource_SingleBlockRead(object sender, CSCore.Streams.SingleBlockReadEventArgs e)
         {
-            spectrumProvider.Add(e.Left, e.Right);
+            spectrumProviderLeft.Add(e.Left, 0);
+            spectrumProviderRight.Add(0, e.Right);
         }
-        public float[] GetFFtData()
+        public float[] GetFFtDataLeft()
         {
-            lock (barData)
+            lock (barDataLeft)
             {
-                lineSpectrum.BarCount = numBars;
-                if (numBars != barData.Length)
+                lineSpectrumLeft.BarCount = numBars;
+                if (numBars != barDataLeft.Length)
                 {
-                    barData = new float[numBars];
+                    barDataLeft = new float[numBars];
                 }
             }
-            if (spectrumProvider.IsNewDataAvailable)
+            if (spectrumProviderLeft.IsNewDataAvailable)
             {
-                lineSpectrum.MinimumFrequency = minFreq;
-                lineSpectrum.MaximumFrequency = maxFreq;
-                lineSpectrum.IsXLogScale = logScale;
-                lineSpectrum.BarSpacing = barSpacing;
-                lineSpectrum.SpectrumProvider.GetFftData(fftBuffer, this);
-                return lineSpectrum.GetSpectrumPoints(100.0f, fftBuffer);
+                lineSpectrumLeft.MinimumFrequency = minFreq;
+                lineSpectrumLeft.MaximumFrequency = maxFreq;
+                lineSpectrumLeft.IsXLogScale = logScale;
+                lineSpectrumLeft.BarSpacing = barSpacing;
+                lineSpectrumLeft.SpectrumProvider.GetFftData(fftBuffer, this);
+                return lineSpectrumLeft.GetSpectrumPoints(100.0f, fftBuffer);
+            }
+            else
+            {
+                return null;
+            }
+        }
+        public float[] GetFFtDataRight()
+        {
+            lock (barDataRight)
+            {
+                lineSpectrumRight.BarCount = numBars;
+                if (numBars != barDataRight.Length)
+                {
+                    barDataRight = new float[numBars];
+                }
+            }
+            if (spectrumProviderRight.IsNewDataAvailable)
+            {
+                lineSpectrumRight.MinimumFrequency = minFreq;
+                lineSpectrumRight.MaximumFrequency = maxFreq;
+                lineSpectrumRight.IsXLogScale = logScale;
+                lineSpectrumRight.BarSpacing = barSpacing;
+                lineSpectrumRight.SpectrumProvider.GetFftData(fftBuffer, this);
+                return lineSpectrumRight.GetSpectrumPoints(100.0f, fftBuffer);
             }
             else
             {
@@ -399,27 +437,56 @@ namespace Playtify
         }
         public void ComputeData()
         {
-            float[] resData = GetFFtData();
-            int numBars = barData.Length;
-            if (resData == null)
+            try
             {
-                return;
-            }
-            lock (barData)
-            {
-                for (int i = 0; i < numBars && i < resData.Length; i++)
+                float[] resData = GetFFtDataLeft();
+                int numBars = barDataLeft.Length;
+                if (resData == null)
                 {
-                    barData[i] = resData[i] / 100.0f;
-                    if (lineSpectrum.UseAverage)
+                    return;
+                }
+                lock (barDataLeft)
+                {
+                    for (int i = 0; i < numBars && i < resData.Length; i++)
                     {
-                        barData[i] = barData[i] + highScaleAverage * (float)Math.Sqrt(i / (numBars + 0.0f)) * barData[i];
-                    }
-                    else
-                    {
-                        barData[i] = barData[i] + highScaleNotAverage * (float)Math.Sqrt(i / (numBars + 0.0f)) * barData[i];
+                        barDataLeft[i] = resData[i] / 100.0f;
+                        if (lineSpectrumLeft.UseAverage)
+                        {
+                            barDataLeft[i] = barDataLeft[i] + highScaleAverage * (float)Math.Sqrt(i / (numBars + 0.0f)) * barDataLeft[i];
+                        }
+                        else
+                        {
+                            barDataLeft[i] = barDataLeft[i] + highScaleNotAverage * (float)Math.Sqrt(i / (numBars + 0.0f)) * barDataLeft[i];
+                        }
                     }
                 }
             }
+            catch { }
+            try
+            {
+                float[] resData = GetFFtDataRight();
+                int numBars = barDataRight.Length;
+                if (resData == null)
+                {
+                    return;
+                }
+                lock (barDataRight)
+                {
+                    for (int i = 0; i < numBars && i < resData.Length; i++)
+                    {
+                        barDataRight[i] = resData[i] / 100.0f;
+                        if (lineSpectrumRight.UseAverage)
+                        {
+                            barDataRight[i] = barDataRight[i] + highScaleAverage * (float)Math.Sqrt(i / (numBars + 0.0f)) * barDataRight[i];
+                        }
+                        else
+                        {
+                            barDataRight[i] = barDataRight[i] + highScaleNotAverage * (float)Math.Sqrt(i / (numBars + 0.0f)) * barDataRight[i];
+                        }
+                    }
+                }
+            }
+            catch { }
         }
         private async void timer1_Tick(object sender, EventArgs e)
         {
@@ -458,21 +525,22 @@ namespace Playtify
                             ctx.fillStyle = 'backgroundcolor';
                             ctx.fillRect(0, 0, WIDTH, HEIGHT);
                             var audiorawdata = [rawdata100];
-                            var barWidth = WIDTH / 99;
+                            var barWidth = WIDTH / 199;
                             var barHeight = HEIGHT;
                             var x = 0;
-                            for (var i = 1; i < 100; i += 1) {
+                            for (var i = 1; i < 200; i += 1) {
                                 barHeight = audiorawdata[i] / 2;
                                 ctx.fillStyle = 'frequencystickscolor';
                                 ctx.strokeStyle = 'frequencystickscolor';
-                                ctx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
+                                ctx.fillRect(x, HEIGHT / 2 - barHeight / 2, barWidth, barHeight / 2);
+                                ctx.fillRect(x, HEIGHT / 2 + barHeight / 2, barWidth, -barHeight / 2);
                                 x += barWidth;
                             }
                             ctx.stroke();
                         }
                         catch {}
                     ";
-                    await execScriptHelper(stringinject.Replace("backgroundcolor", backgroundcolor).Replace("frequencystickscolor", frequencystickscolor).Replace("rawdata100", (int)barData[0] + ", " + (int)barData[1] + ", " + (int)barData[2] + ", " + (int)barData[3] + ", " + (int)barData[4] + ", " + (int)barData[5] + ", " + (int)barData[6] + ", " + (int)barData[7] + ", " + (int)barData[8] + ", " + (int)barData[9] + ", " + (int)barData[10] + ", " + (int)barData[11] + ", " + (int)barData[12] + ", " + (int)barData[13] + ", " + (int)barData[14] + ", " + (int)barData[15] + ", " + (int)barData[16] + ", " + (int)barData[17] + ", " + (int)barData[18] + ", " + (int)barData[19] + ", " + (int)barData[20] + ", " + (int)barData[21] + ", " + (int)barData[22] + ", " + (int)barData[23] + ", " + (int)barData[24] + ", " + (int)barData[25] + ", " + (int)barData[26] + ", " + (int)barData[27] + ", " + (int)barData[28] + ", " + (int)barData[29] + ", " + (int)barData[30] + ", " + (int)barData[31] + ", " + (int)barData[32] + ", " + (int)barData[33] + ", " + (int)barData[34] + ", " + (int)barData[35] + ", " + (int)barData[36] + ", " + (int)barData[37] + ", " + (int)barData[38] + ", " + (int)barData[39] + ", " + (int)barData[40] + ", " + (int)barData[41] + ", " + (int)barData[42] + ", " + (int)barData[43] + ", " + (int)barData[44] + ", " + (int)barData[45] + ", " + (int)barData[46] + ", " + (int)barData[47] + ", " + (int)barData[48] + ", " + (int)barData[49] + ", " + (int)barData[50] + ", " + (int)barData[51] + ", " + (int)barData[52] + ", " + (int)barData[53] + ", " + (int)barData[54] + ", " + (int)barData[55] + ", " + (int)barData[56] + ", " + (int)barData[57] + ", " + (int)barData[58] + ", " + (int)barData[59] + ", " + (int)barData[60] + ", " + (int)barData[61] + ", " + (int)barData[62] + ", " + (int)barData[63] + ", " + (int)barData[64] + ", " + (int)barData[65] + ", " + (int)barData[66] + ", " + (int)barData[67] + ", " + (int)barData[68] + ", " + (int)barData[69] + ", " + (int)barData[70] + ", " + (int)barData[71] + ", " + (int)barData[72] + ", " + (int)barData[73] + ", " + (int)barData[74] + ", " + (int)barData[75] + ", " + (int)barData[76] + ", " + (int)barData[77] + ", " + (int)barData[78] + ", " + (int)barData[79] + ", " + (int)barData[80] + ", " + (int)barData[81] + ", " + (int)barData[82] + ", " + (int)barData[83] + ", " + (int)barData[84] + ", " + (int)barData[85] + ", " + (int)barData[86] + ", " + (int)barData[87] + ", " + (int)barData[88] + ", " + (int)barData[89] + ", " + (int)barData[90] + ", " + (int)barData[91] + ", " + (int)barData[92] + ", " + (int)barData[93] + ", " + (int)barData[94] + ", " + (int)barData[95] + ", " + (int)barData[96] + ", " + (int)barData[97] + ", " + (int)barData[98] + ", " + (int)barData[99]));
+                    await execScriptHelper(stringinject.Replace("backgroundcolor", backgroundcolor).Replace("frequencystickscolor", frequencystickscolor).Replace("rawdata100", (int)barDataLeft[0] + ", " + (int)barDataLeft[1] + ", " + (int)barDataLeft[2] + ", " + (int)barDataLeft[3] + ", " + (int)barDataLeft[4] + ", " + (int)barDataLeft[5] + ", " + (int)barDataLeft[6] + ", " + (int)barDataLeft[7] + ", " + (int)barDataLeft[8] + ", " + (int)barDataLeft[9] + ", " + (int)barDataLeft[10] + ", " + (int)barDataLeft[11] + ", " + (int)barDataLeft[12] + ", " + (int)barDataLeft[13] + ", " + (int)barDataLeft[14] + ", " + (int)barDataLeft[15] + ", " + (int)barDataLeft[16] + ", " + (int)barDataLeft[17] + ", " + (int)barDataLeft[18] + ", " + (int)barDataLeft[19] + ", " + (int)barDataLeft[20] + ", " + (int)barDataLeft[21] + ", " + (int)barDataLeft[22] + ", " + (int)barDataLeft[23] + ", " + (int)barDataLeft[24] + ", " + (int)barDataLeft[25] + ", " + (int)barDataLeft[26] + ", " + (int)barDataLeft[27] + ", " + (int)barDataLeft[28] + ", " + (int)barDataLeft[29] + ", " + (int)barDataLeft[30] + ", " + (int)barDataLeft[31] + ", " + (int)barDataLeft[32] + ", " + (int)barDataLeft[33] + ", " + (int)barDataLeft[34] + ", " + (int)barDataLeft[35] + ", " + (int)barDataLeft[36] + ", " + (int)barDataLeft[37] + ", " + (int)barDataLeft[38] + ", " + (int)barDataLeft[39] + ", " + (int)barDataLeft[40] + ", " + (int)barDataLeft[41] + ", " + (int)barDataLeft[42] + ", " + (int)barDataLeft[43] + ", " + (int)barDataLeft[44] + ", " + (int)barDataLeft[45] + ", " + (int)barDataLeft[46] + ", " + (int)barDataLeft[47] + ", " + (int)barDataLeft[48] + ", " + (int)barDataLeft[49] + ", " + (int)barDataLeft[50] + ", " + (int)barDataLeft[51] + ", " + (int)barDataLeft[52] + ", " + (int)barDataLeft[53] + ", " + (int)barDataLeft[54] + ", " + (int)barDataLeft[55] + ", " + (int)barDataLeft[56] + ", " + (int)barDataLeft[57] + ", " + (int)barDataLeft[58] + ", " + (int)barDataLeft[59] + ", " + (int)barDataLeft[60] + ", " + (int)barDataLeft[61] + ", " + (int)barDataLeft[62] + ", " + (int)barDataLeft[63] + ", " + (int)barDataLeft[64] + ", " + (int)barDataLeft[65] + ", " + (int)barDataLeft[66] + ", " + (int)barDataLeft[67] + ", " + (int)barDataLeft[68] + ", " + (int)barDataLeft[69] + ", " + (int)barDataLeft[70] + ", " + (int)barDataLeft[71] + ", " + (int)barDataLeft[72] + ", " + (int)barDataLeft[73] + ", " + (int)barDataLeft[74] + ", " + (int)barDataLeft[75] + ", " + (int)barDataLeft[76] + ", " + (int)barDataLeft[77] + ", " + (int)barDataLeft[78] + ", " + (int)barDataLeft[79] + ", " + (int)barDataLeft[80] + ", " + (int)barDataLeft[81] + ", " + (int)barDataLeft[82] + ", " + (int)barDataLeft[83] + ", " + (int)barDataLeft[84] + ", " + (int)barDataLeft[85] + ", " + (int)barDataLeft[86] + ", " + (int)barDataLeft[87] + ", " + (int)barDataLeft[88] + ", " + (int)barDataLeft[89] + ", " + (int)barDataLeft[90] + ", " + (int)barDataLeft[91] + ", " + (int)barDataLeft[92] + ", " + (int)barDataLeft[93] + ", " + (int)barDataLeft[94] + ", " + (int)barDataLeft[95] + ", " + (int)barDataLeft[96] + ", " + (int)barDataLeft[97] + ", " + (int)barDataLeft[98] + ", " + (int)barDataLeft[99] + ", " + (int)barDataRight[0] + ", " + (int)barDataRight[1] + ", " + (int)barDataRight[2] + ", " + (int)barDataRight[3] + ", " + (int)barDataRight[4] + ", " + (int)barDataRight[5] + ", " + (int)barDataRight[6] + ", " + (int)barDataRight[7] + ", " + (int)barDataRight[8] + ", " + (int)barDataRight[9] + ", " + (int)barDataRight[10] + ", " + (int)barDataRight[11] + ", " + (int)barDataRight[12] + ", " + (int)barDataRight[13] + ", " + (int)barDataRight[14] + ", " + (int)barDataRight[15] + ", " + (int)barDataRight[16] + ", " + (int)barDataRight[17] + ", " + (int)barDataRight[18] + ", " + (int)barDataRight[19] + ", " + (int)barDataRight[20] + ", " + (int)barDataRight[21] + ", " + (int)barDataRight[22] + ", " + (int)barDataRight[23] + ", " + (int)barDataRight[24] + ", " + (int)barDataRight[25] + ", " + (int)barDataRight[26] + ", " + (int)barDataRight[27] + ", " + (int)barDataRight[28] + ", " + (int)barDataRight[29] + ", " + (int)barDataRight[30] + ", " + (int)barDataRight[31] + ", " + (int)barDataRight[32] + ", " + (int)barDataRight[33] + ", " + (int)barDataRight[34] + ", " + (int)barDataRight[35] + ", " + (int)barDataRight[36] + ", " + (int)barDataRight[37] + ", " + (int)barDataRight[38] + ", " + (int)barDataRight[39] + ", " + (int)barDataRight[40] + ", " + (int)barDataRight[41] + ", " + (int)barDataRight[42] + ", " + (int)barDataRight[43] + ", " + (int)barDataRight[44] + ", " + (int)barDataRight[45] + ", " + (int)barDataRight[46] + ", " + (int)barDataRight[47] + ", " + (int)barDataRight[48] + ", " + (int)barDataRight[49] + ", " + (int)barDataRight[50] + ", " + (int)barDataRight[51] + ", " + (int)barDataRight[52] + ", " + (int)barDataRight[53] + ", " + (int)barDataRight[54] + ", " + (int)barDataRight[55] + ", " + (int)barDataRight[56] + ", " + (int)barDataRight[57] + ", " + (int)barDataRight[58] + ", " + (int)barDataRight[59] + ", " + (int)barDataRight[60] + ", " + (int)barDataRight[61] + ", " + (int)barDataRight[62] + ", " + (int)barDataRight[63] + ", " + (int)barDataRight[64] + ", " + (int)barDataRight[65] + ", " + (int)barDataRight[66] + ", " + (int)barDataRight[67] + ", " + (int)barDataRight[68] + ", " + (int)barDataRight[69] + ", " + (int)barDataRight[70] + ", " + (int)barDataRight[71] + ", " + (int)barDataRight[72] + ", " + (int)barDataRight[73] + ", " + (int)barDataRight[74] + ", " + (int)barDataRight[75] + ", " + (int)barDataRight[76] + ", " + (int)barDataRight[77] + ", " + (int)barDataRight[78] + ", " + (int)barDataRight[79] + ", " + (int)barDataRight[80] + ", " + (int)barDataRight[81] + ", " + (int)barDataRight[82] + ", " + (int)barDataRight[83] + ", " + (int)barDataRight[84] + ", " + (int)barDataRight[85] + ", " + (int)barDataRight[86] + ", " + (int)barDataRight[87] + ", " + (int)barDataRight[88] + ", " + (int)barDataRight[89] + ", " + (int)barDataRight[90] + ", " + (int)barDataRight[91] + ", " + (int)barDataRight[92] + ", " + (int)barDataRight[93] + ", " + (int)barDataRight[94] + ", " + (int)barDataRight[95] + ", " + (int)barDataRight[96] + ", " + (int)barDataRight[97] + ", " + (int)barDataRight[98] + ", " + (int)barDataRight[99]));
                 }
                 catch { }
                 KeyboardHookProcessButtons();
