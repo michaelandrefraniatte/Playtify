@@ -423,7 +423,7 @@ namespace Playtify
         }
         private async void timer1_Tick(object sender, EventArgs e)
         {
-            if (File.Exists(Application.StartupPath + @"\Playtify.exe.WebView2\EBWebView\Default\IndexedDB\https_www.deezer.com_0.indexeddb.leveldb/LOG.old"))
+            if (File.Exists(Application.StartupPath + @"\Playtify.exe.WebView2\EBWebView\Default\IndexedDB\https_open.spotify.com_0.indexeddb.leveldb/LOG.old"))
             {
                 try
                 {
@@ -433,14 +433,14 @@ namespace Playtify
                             var parentcanvas = document.getElementById('parentcanvas');
                             if (parentcanvas == null) {
                                 parentcanvas = document.createElement('div');
-                                document.getElementById('page_topbar').after(parentcanvas);
+                                document.getElementsByTagName('footer')[0].after(parentcanvas);
                                 parentcanvas.id = 'parentcanvas';
                             }
                             parentcanvas.style.position = 'relative';
                             parentcanvas.style.display = 'inline-block';
-                            parentcanvas.style.width = 'calc(100% - var(--layout-sidebar-width))';
-                            parentcanvas.style.height = '200px';
-                            parentcanvas.style.left = 'var(--layout-sidebar-width)';
+                            parentcanvas.style.width = 'calc(100%)';
+                            parentcanvas.style.height = '100px';
+                            parentcanvas.style.left = '0px';
                             parentcanvas.style.top = '0px';
                             parentcanvas.style.backgroundColor = 'backgroundcolor';
                             var canvas = document.getElementsByTagName('canvas');
