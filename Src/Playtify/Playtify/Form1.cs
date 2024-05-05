@@ -350,6 +350,7 @@ namespace Playtify
         }
         public void GetAudioByteArray()
         {
+            System.Threading.Thread.Sleep(2000);
             capture = new CSCore.SoundIn.WasapiLoopbackCapture();
             capture.Initialize();
             CSCore.IWaveSource source = new CSCore.Streams.SoundInSource(capture);
