@@ -1,4 +1,4 @@
 // Handle to previous/next track
 False
 // Enable EchoBoost
-False
+True
