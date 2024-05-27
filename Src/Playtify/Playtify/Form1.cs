@@ -145,11 +145,12 @@ namespace Playtify
             CoreWebView2EnvironmentOptions options = new CoreWebView2EnvironmentOptions("--disable-web-security --autoplay-policy=no-user-gesture-required", "en");
             CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, null, options);
             await webView21.EnsureCoreWebView2Async(environment);
-            //webView21.CoreWebView2.Settings.AreDevToolsEnabled = true;
-            //webView21.CoreWebView2.OpenDevToolsWindow();
             webView21.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
             webView21.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
-            webView21.CoreWebView2.Settings.AreDevToolsEnabled = true;
+            //webView21.CoreWebView2.Settings.AreDevToolsEnabled = true;
+            //webView21.CoreWebView2.OpenDevToolsWindow();
+            webView21.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            webView21.CoreWebView2.Settings.IsStatusBarEnabled = false;
             using (StreamReader file = new StreamReader("playtify.txt"))
             {
                 webView21.Source = new Uri(file.ReadLine());
