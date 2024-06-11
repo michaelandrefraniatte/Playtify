@@ -663,7 +663,7 @@ namespace Playtify
             if (!closeonicon)
             {
                 e.Cancel = true;
-                MinimzedTray();
+                MinimizedToTray();
                 return;
             }
         }
@@ -677,8 +677,9 @@ namespace Playtify
             closeonicon = true;
             this.Close();
         }
-        private void MinimzedTray()
+        private void MinimizedToTray()
         {
+            this.WindowState = FormWindowState.Normal;
             ShowWindow(Process.GetCurrentProcess().MainWindowHandle, 0);
         }
         private void MaxmizedFromTray()
