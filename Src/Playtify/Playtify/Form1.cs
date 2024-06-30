@@ -514,13 +514,12 @@ namespace Playtify
                             parentcanvas.style.left = '0px';
                             parentcanvas.style.top = '0px';
                             parentcanvas.style.backgroundColor = 'backgroundcolor';
-                            var canvas = document.getElementsByTagName('canvas');
-                            if (canvas.length == 0) {
+                            var canvas = document.getElementById('canvas');
+                            if (canvas == null) {
                                 canvas = document.createElement('canvas');
                                 parentcanvas.append(canvas);
                                 canvas.id = 'canvas';
                             }
-                            canvas = document.getElementById('canvas');
                             canvas.width = parentcanvas.clientWidth;
                             canvas.height = parentcanvas.clientHeight;
                             var WIDTH = canvas.width;
